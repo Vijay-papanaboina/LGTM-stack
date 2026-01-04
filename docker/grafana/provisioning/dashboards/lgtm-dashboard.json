@@ -530,7 +530,7 @@
         {
           "datasource": { "type": "loki", "uid": "loki" },
           "editorMode": "code",
-          "expr": "{container=~\"sample-app|order-service|payment-service\"} |= ``",
+          "expr": "{app=~\"gateway|order-service|payment-service\"}",
           "queryType": "range",
           "refId": "A"
         }
@@ -547,13 +547,14 @@
         {
           "datasource": { "type": "tempo", "uid": "tempo" },
           "limit": 20,
-          "queryType": "traceqlSearch",
+          "queryType": "traceql",
+          "query": "{resource.service.name=~\"gateway|order-service|payment-service\"}",
           "refId": "A",
           "tableType": "traces"
         }
       ],
       "title": "🔍 Recent Traces",
-      "type": "traces"
+      "type": "table"
     }
   ],
   "refresh": "5s",
