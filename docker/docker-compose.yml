@@ -1,0 +1,268 @@
+# ============================================================
+# LGTM OBSERVABILITY STACK
+# ============================================================
+#
+# ARCHITECTURE:
+#   ┌─────────────────────────────────────────────────────────┐
+#   │                      GRAFANA                            │
+#   │   (Unified UI for all observability data)               │
+#   └─────────────────────────────────────────────────────────┘
+#                    │          │          │
+#              Metrics      Logs      Traces
+#                    │          │          │
+#   ┌────────────┐ ┌────────────┐ ┌────────────┐
+#   │ PROMETHEUS │ │    LOKI    │ │   TEMPO    │
+#   │  (Metrics) │ │   (Logs)   │ │  (Traces)  │
+#   └────────────┘ └────────────┘ └────────────┘
+#         ↑              ↑              ↑
+#      scrapes       Promtail        OTLP
+#         │          collects       export
+#   ┌─────────────────────────────────────────┐
+#   │  YOUR APPS (gateway, order, payment)    │
+#   └─────────────────────────────────────────┘
+#
+# QUICK START:
+#   docker-compose up -d --build    # Start everything
+#   docker-compose logs -f          # Follow all logs
+#   docker-compose down             # Stop everything
+#
+# ENDPOINTS:
+#   Grafana:       http://localhost:3000  (admin/admin)
+#   Prometheus:    http://localhost:9090
+#   Loki:          http://localhost:3100
+#   Tempo:         http://localhost:3200
+#   Gateway App:   http://localhost:8000
+#   Order Service: http://localhost:8001
+#   Payment:       http://localhost:8002
+# ============================================================
+
+services:
+  # ============================================================
+  # PROMETHEUS - Time-series database for metrics
+  # ============================================================
+  # HOW IT WORKS:
+  #   1. Apps expose /metrics endpoint with current values
+  #   2. Prometheus PULLS (scrapes) these every 15s
+  #   3. Stores as time-series (value + timestamp)
+  #   4. Grafana queries via PromQL
+  #
+  # WHY PULL-BASED:
+  #   - Works through firewalls (Prometheus initiates)
+  #   - If target is down, Prometheus knows immediately
+  #   - No need to configure each app with Prometheus address
+  # ============================================================
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: prometheus
+    ports:
+      - "9090:9090" # Web UI + API for PromQL queries
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus # Persist metrics across restarts
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle" # Hot-reload config without restart
+      - "--web.enable-remote-write-receiver" # Allow Tempo to push metrics
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+    restart: unless-stopped
+    networks:
+      - lgtm-network
+
+  # ============================================================
+  # LOKI - Log aggregation (like Prometheus, but for logs)
+  # ============================================================
+  # KEY INSIGHT: Loki only indexes LABELS, not log content!
+  # This makes it MUCH cheaper to run than Elasticsearch.
+  #
+  # Query examples (LogQL):
+  #   {app="gateway"}              - All gateway logs
+  #   {level="error"} |= "timeout" - Errors containing "timeout"
+  # ============================================================
+  loki:
+    image: grafana/loki:2.9.3
+    container_name: loki
+    ports:
+      - "3100:3100" # HTTP API (Promtail pushes here, Grafana queries here)
+    volumes:
+      - ./loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    restart: unless-stopped
+    networks:
+      - lgtm-network
+
+  # ============================================================
+  # TEMPO - Distributed tracing backend
+  # ============================================================
+  # Tempo receives traces from applications via OTLP protocol
+  # and stores them for querying through Grafana.
+  #
+  # Our apps send traces to:
+  #   - Port 4317 (gRPC) for faster performance
+  #   - Port 4318 (HTTP) for easier debugging
+  # ============================================================
+  tempo:
+    image: grafana/tempo:2.3.1
+    container_name: tempo
+    ports:
+      - "3200:3200" # Tempo HTTP API (for Grafana queries)
+      - "4317:4317" # OTLP gRPC receiver (apps send traces here)
+      - "4318:4318" # OTLP HTTP receiver (alternative)
+    volumes:
+      - ./tempo/tempo-config.yaml:/etc/tempo/config.yaml:ro
+      - tempo_data:/var/tempo
+    command: ["-config.file=/etc/tempo/config.yaml"]
+    restart: unless-stopped
+    networks:
+      - lgtm-network
+
+  # ============================================================
+  # PROMTAIL - Log collector (collects Docker container logs)
+  # ============================================================
+  promtail:
+    image: grafana/promtail:2.9.3
+    container_name: promtail
+    volumes:
+      - ./promtail/promtail-config.yaml:/etc/promtail/config.yaml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: -config.file=/etc/promtail/config.yaml
+    restart: unless-stopped
+    networks:
+      - lgtm-network
+    depends_on:
+      - loki
+
+  # ============================================================
+  # NODE EXPORTER - Host/container metrics (CPU, RAM, disk)
+  # ============================================================
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: node-exporter
+    ports:
+      - "9100:9100"
+    # On Windows/Mac with Docker Desktop, we can't mount /proc
+    # So we'll get container-level metrics instead (still useful for learning!)
+    restart: unless-stopped
+    networks:
+      - lgtm-network
+
+  # ============================================================
+  # GATEWAY / SAMPLE APP - API Gateway with tracing
+  # ============================================================
+  # This is the entry point for user requests.
+  # It calls order-service and propagates trace context.
+  # ============================================================
+  sample-app:
+    build:
+      context: ../sample-app
+      dockerfile: Dockerfile
+    container_name: sample-app
+    ports:
+      - "8000:8000"
+    environment:
+      # URL of the order service (for inter-service calls)
+      - ORDER_SERVICE_URL=http://order-service:8001
+      # Where to send traces (Tempo's OTLP HTTP endpoint)
+      - OTLP_ENDPOINT=http://tempo:4318/v1/traces
+    restart: unless-stopped
+    networks:
+      - lgtm-network
+    depends_on:
+      - tempo
+      - order-service
+    labels:
+      - "logging=promtail"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        tag: "{{.Name}}"
+
+  # ============================================================
+  # ORDER SERVICE - Processes orders, calls payment service
+  # ============================================================
+  # Middle service in the chain:
+  # sample-app → order-service → payment-service
+  # ============================================================
+  order-service:
+    build:
+      context: ../order-service
+      dockerfile: Dockerfile
+    container_name: order-service
+    ports:
+      - "8001:8001"
+    environment:
+      - PAYMENT_SERVICE_URL=http://payment-service:8002
+      - OTLP_ENDPOINT=http://tempo:4318/v1/traces
+    restart: unless-stopped
+    networks:
+      - lgtm-network
+    depends_on:
+      - tempo
+      - payment-service
+    labels:
+      - "logging=promtail"
+
+  # ============================================================
+  # PAYMENT SERVICE - Final service in the chain
+  # ============================================================
+  # Processes payments and returns result.
+  # This is the innermost span in the trace.
+  # ============================================================
+  payment-service:
+    build:
+      context: ../payment-service
+      dockerfile: Dockerfile
+    container_name: payment-service
+    ports:
+      - "8002:8002"
+    environment:
+      - OTLP_ENDPOINT=http://tempo:4318/v1/traces
+    restart: unless-stopped
+    networks:
+      - lgtm-network
+    depends_on:
+      - tempo
+    labels:
+      - "logging=promtail"
+
+  # ============================================================
+  # GRAFANA - Visualization and dashboards
+  # ============================================================
+  grafana:
+    image: grafana/grafana:10.2.3
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    restart: unless-stopped
+    networks:
+      - lgtm-network
+    depends_on:
+      - prometheus
+      - loki
+
+# ============================================================
+# VOLUMES - Persistent storage
+# ============================================================
+volumes:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+  tempo_data:
+
+# ============================================================
+# NETWORKS
+# ============================================================
+networks:
+  lgtm-network:
+    driver: bridge

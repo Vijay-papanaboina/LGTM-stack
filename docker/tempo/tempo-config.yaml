@@ -1,0 +1,80 @@
+# ============================================================
+# TEMPO CONFIGURATION
+# ============================================================
+# Tempo is Grafana's distributed tracing backend.
+# It receives traces from applications (via OTLP, Jaeger, Zipkin protocols)
+# and stores them for querying through Grafana.
+#
+# Key concepts:
+# - Tempo only indexes Trace IDs (not the full trace data)
+# - This makes it much cheaper to run than other tracing backends
+# - You query by Trace ID, or use Grafana to find traces via logs/metrics
+# ============================================================
+
+# Server configuration
+# --------------------
+server:
+  http_listen_port: 3200 # Tempo's HTTP API endpoint
+
+# Distributor configuration
+# -------------------------
+# The distributor receives traces from applications and forwards them to ingesters
+distributor:
+  receivers:
+    # OTLP (OpenTelemetry Protocol) - the modern standard
+    # This is what our apps will use to send traces
+    otlp:
+      protocols:
+        # gRPC receiver (faster, used by most SDKs)
+        grpc:
+          endpoint: 0.0.0.0:4317
+        # HTTP receiver (easier to debug, works through proxies)
+        http:
+          endpoint: 0.0.0.0:4318
+
+# Ingester configuration
+# ----------------------
+# Ingesters batch and compress traces before writing to storage
+ingester:
+  trace_idle_period: 5s # Traces considered "complete" sooner
+  max_block_bytes: 1_000_000 # Smaller blocks
+  max_block_duration: 30s # Flush blocks to storage every 30s (CRITICAL FOR DEMO)
+  complete_block_timeout: 30s # Flush sooner
+
+# Compactor configuration
+# -----------------------
+# Compacts old blocks to save space
+compactor:
+  compaction:
+    compaction_window: 1h # Compact hourly
+    max_block_bytes: 100_000_000
+    block_retention: 24h
+    compacted_block_retention: 1h
+
+# Storage configuration
+# ---------------------
+# Where Tempo stores trace data
+storage:
+  trace:
+    backend: local # Use local filesystem (prod would use S3/GCS)
+    local:
+      path: /var/tempo/traces
+    wal:
+      path: /var/tempo/wal # Write-ahead log for durability
+
+# Metrics generator (optional)
+# ----------------------------
+# Generates metrics from traces (RED metrics: Rate, Errors, Duration)
+metrics_generator:
+  registry:
+    external_labels:
+      source: tempo
+      cluster: docker-compose
+  storage:
+    path: /var/tempo/generator/wal
+    remote_write:
+      - url: http://prometheus:9090/api/v1/write
+        send_exemplars: true
+
+overrides:
+  metrics_generator_processors: [service-graphs, span-metrics]

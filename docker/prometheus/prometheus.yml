@@ -1,0 +1,84 @@
+# ============================================================
+# PROMETHEUS SCRAPE CONFIGURATION
+# ============================================================
+#
+# HOW PROMETHEUS COLLECTS METRICS:
+#   Every 15 seconds, Prometheus sends HTTP GET to each target's /metrics
+#   Each target responds with current metric values in text format
+#   Prometheus stores these with timestamps for historical queries
+#
+# KEY CONCEPTS:
+#   - job_name: Logical grouping (all instances get this label)
+#   - targets: List of host:port to scrape
+#   - relabel_configs: Transform/add labels before storage
+#
+# Learn more: https://prometheus.io/docs/prometheus/latest/configuration/
+# ============================================================
+
+global:
+  scrape_interval: 5s # How often to scrape (lower = more data, more load)
+  evaluation_interval: 5s # How often to evaluate alerting rules
+
+# Alertmanager configuration (uncomment when you add alerting)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets: ['alertmanager:9093']
+
+# Scrape configurations
+scrape_configs:
+  # ============================================================
+  # 1. Prometheus itself (yes, it monitors itself!)
+  # ============================================================
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+    # Labels added to all metrics from this job
+    relabel_configs:
+      - source_labels: []
+        target_label: "service"
+        replacement: "prometheus"
+
+  # ============================================================
+  # 2. Node Exporter - CPU, RAM, Disk, Network
+  # ============================================================
+  - job_name: "node-exporter"
+    static_configs:
+      - targets: ["node-exporter:9100"]
+    relabel_configs:
+      - source_labels: []
+        target_label: "service"
+        replacement: "infrastructure"
+
+  # ============================================================
+  # 3. Our Sample Application - Custom app metrics
+  # ============================================================
+  - job_name: "sample-app"
+    static_configs:
+      - targets: ["sample-app:8000"]
+    relabel_configs:
+      - source_labels: []
+        target_label: "service"
+        replacement: "sample-app"
+
+  # ============================================================
+  # 4. Order Service (New)
+  # ============================================================
+  - job_name: "order-service"
+    static_configs:
+      - targets: ["order-service:8001"]
+    relabel_configs:
+      - source_labels: []
+        target_label: "service"
+        replacement: "order-service"
+
+  # ============================================================
+  # 5. Payment Service (New)
+  # ============================================================
+  - job_name: "payment-service"
+    static_configs:
+      - targets: ["payment-service:8002"]
+    relabel_configs:
+      - source_labels: []
+        target_label: "service"
+        replacement: "payment-service"

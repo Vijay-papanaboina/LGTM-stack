@@ -1,0 +1,15 @@
+# Grafana Dashboards Provisioning
+# This tells Grafana where to find dashboard JSON files
+# Learn more: https://grafana.com/docs/grafana/latest/administration/provisioning/
+
+apiVersion: 1
+
+providers:
+  - name: "LGTM Dashboards"
+    orgId: 1
+    folder: "LGTM Learning"
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
