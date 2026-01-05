@@ -1,0 +1,19 @@
+# ============================================================
+# Sample App Service
+# ============================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: sample-app
+  namespace: lgtm
+  labels:
+    app: sample-app
+spec:
+  type: ClusterIP
+  selector:
+    app: sample-app
+  ports:
+    - port: 8000
+      targetPort: 8000
+      name: http

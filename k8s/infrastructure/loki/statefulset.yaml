@@ -1,0 +1,69 @@
+# ============================================================
+# Loki StatefulSet
+# ============================================================
+# Using StatefulSet for stable network identity (important for logs)
+# ============================================================
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: loki
+  namespace: lgtm
+  labels:
+    app: loki
+spec:
+  replicas: 1
+  serviceName: loki-headless
+  selector:
+    matchLabels:
+      app: loki
+  template:
+    metadata:
+      labels:
+        app: loki
+    spec:
+      securityContext:
+        fsGroup: 10001 # Loki runs as user 10001
+        runAsUser: 10001
+        runAsNonRoot: true
+      containers:
+        - name: loki
+          image: grafana/loki:2.9.0
+          args:
+            - "-config.file=/etc/loki/loki-config.yaml"
+          ports:
+            - containerPort: 3100
+              name: http
+            - containerPort: 9096
+              name: grpc
+          volumeMounts:
+            - name: config
+              mountPath: /etc/loki
+            - name: data
+              mountPath: /loki
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: 3100
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3100
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: loki-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: loki-pvc

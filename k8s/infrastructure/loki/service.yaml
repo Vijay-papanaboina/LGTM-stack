@@ -1,0 +1,47 @@
+# ============================================================
+# Loki Headless Service (for StatefulSet)
+# ============================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: loki-headless
+  namespace: lgtm
+  labels:
+    app: loki
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: loki
+  ports:
+    - port: 3100
+      targetPort: 3100
+      name: http
+    - port: 9096
+      targetPort: 9096
+      name: grpc
+
+---
+# ============================================================
+# Loki Service (for load-balanced access)
+# ============================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: loki
+  namespace: lgtm
+  labels:
+    app: loki
+spec:
+  type: ClusterIP
+  selector:
+    app: loki
+  ports:
+    - port: 3100
+      targetPort: 3100
+      name: http
+    - port: 9096
+      targetPort: 9096
+      name: grpc

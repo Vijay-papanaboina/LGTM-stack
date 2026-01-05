@@ -1,0 +1,19 @@
+# ============================================================
+# Payment Service
+# ============================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-service
+  namespace: lgtm
+  labels:
+    app: payment-service
+spec:
+  type: ClusterIP
+  selector:
+    app: payment-service
+  ports:
+    - port: 8002
+      targetPort: 8002
+      name: http

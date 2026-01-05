@@ -1,0 +1,64 @@
+# ============================================================
+# Promtail ConfigMap
+# ============================================================
+# Promtail configuration for Kubernetes log collection
+# Uses Kubernetes API for pod discovery
+# ============================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: promtail-config
+  namespace: lgtm
+  labels:
+    app: promtail
+data:
+  promtail.yaml: |
+    server:
+      http_listen_port: 9080
+      grpc_listen_port: 0
+
+    positions:
+      filename: /tmp/positions.yaml
+
+    clients:
+      - url: http://loki.lgtm.svc.cluster.local:3100/loki/api/v1/push
+
+    scrape_configs:
+      # Scrape logs using direct file paths (bypassing K8s API discovery issues)
+      - job_name: kubernetes-pods-static
+        static_configs:
+          - targets:
+              - localhost
+            labels:
+              job: kubernetes-pods
+              __path__: /var/log/pods/lgtm_*/*/*.log
+
+        pipeline_stages:
+          - cri: {}
+          
+          # Extract metadata from file path
+          # Path format: /var/log/pods/NAMESPACE_POD_UID/CONTAINER/*.log
+          - regex:
+              expression: "^/var/log/pods/(?P<namespace>[^_]+)_(?P<pod>[^_]+)_(?P<uid>[^/]+)/(?P<container>[^/]+)/.*$"
+              source: filename
+
+          - labels:
+              namespace:
+              pod:
+              container:
+
+          # Parse JSON logs
+          # Safe parsing that won't drop non-JSON lines
+          - json:
+              expressions:
+                level: level
+                message: message
+                status: status
+                app: app
+              drop_malformed: false
+
+          - labels:
+              level:
+              status:
+              app:

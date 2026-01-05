@@ -1,0 +1,52 @@
+# ============================================================
+# Prometheus ConfigMap
+# ============================================================
+# Contains prometheus.yml configuration
+# Updated for Kubernetes service discovery
+# ============================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: lgtm
+  labels:
+    app: prometheus
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 5s
+      evaluation_interval: 5s
+
+    scrape_configs:
+      # Prometheus self-monitoring
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+        relabel_configs:
+          - target_label: service
+            replacement: prometheus
+
+      # Sample App (Gateway)
+      - job_name: 'sample-app'
+        static_configs:
+          - targets: ['sample-app.lgtm.svc.cluster.local:8000']
+        relabel_configs:
+          - target_label: service
+            replacement: sample-app
+
+      # Order Service
+      - job_name: 'order-service'
+        static_configs:
+          - targets: ['order-service.lgtm.svc.cluster.local:8001']
+        relabel_configs:
+          - target_label: service
+            replacement: order-service
+
+      # Payment Service
+      - job_name: 'payment-service'
+        static_configs:
+          - targets: ['payment-service.lgtm.svc.cluster.local:8002']
+        relabel_configs:
+          - target_label: service
+            replacement: payment-service

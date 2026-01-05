@@ -1,0 +1,56 @@
+# ============================================================
+# Order Service Deployment
+# ============================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+  namespace: lgtm
+  labels:
+    app: order-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: order-service
+  template:
+    metadata:
+      labels:
+        app: order-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8001"
+    spec:
+      containers:
+        - name: order-service
+          image: asia-south1-docker.pkg.dev/learning-gcp-22/lgtm-stack/order-service:v3
+          ports:
+            - containerPort: 8001
+              name: http
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: PAYMENT_SERVICE_URL
+              value: "http://payment-service.lgtm.svc.cluster.local:8002"
+            - name: OTLP_ENDPOINT
+              value: "http://tempo.lgtm.svc.cluster.local:4318/v1/traces"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 5
+            periodSeconds: 10

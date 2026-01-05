@@ -1,0 +1,14 @@
+# ============================================================
+# LGTM Namespace
+# ============================================================
+# All observability components will be deployed in this namespace
+# This keeps them isolated from other workloads
+# ============================================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lgtm
+  labels:
+    app.kubernetes.io/name: lgtm-stack
+    app.kubernetes.io/part-of: observability

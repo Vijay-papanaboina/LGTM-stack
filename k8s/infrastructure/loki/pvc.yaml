@@ -1,0 +1,18 @@
+# ============================================================
+# Loki PersistentVolumeClaim
+# ============================================================
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: loki-pvc
+  namespace: lgtm
+  labels:
+    app: loki
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard-rwo
+  resources:
+    requests:
+      storage: 10Gi

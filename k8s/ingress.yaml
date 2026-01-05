@@ -1,0 +1,34 @@
+# ============================================================
+# LGTM Ingress (NGINX Ingress Controller)
+# ============================================================
+# - Grafana at /grafana (serves from subpath)
+# - Sample-app at / (root)
+# - Prometheus: use kubectl port-forward svc/prometheus 9090:9090 -n lgtm
+# ============================================================
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: lgtm-ingress
+  namespace: lgtm
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          # Grafana - serves from /grafana subpath
+          - path: /grafana
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana
+                port:
+                  number: 3000
+          # Sample App - serves from root
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sample-app
+                port:
+                  number: 8000

@@ -1,0 +1,19 @@
+# ============================================================
+# Grafana Service
+# ============================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: lgtm
+  labels:
+    app: grafana
+spec:
+  type: ClusterIP
+  selector:
+    app: grafana
+  ports:
+    - port: 3000
+      targetPort: 3000
+      name: http

@@ -1,0 +1,53 @@
+# ============================================================
+# Tempo Headless Service (for StatefulSet)
+# ============================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: tempo-headless
+  namespace: lgtm
+  labels:
+    app: tempo
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: tempo
+  ports:
+    - port: 3200
+      targetPort: 3200
+      name: http
+    - port: 4317
+      targetPort: 4317
+      name: otlp-grpc
+    - port: 4318
+      targetPort: 4318
+      name: otlp-http
+
+---
+# ============================================================
+# Tempo Service (for load-balanced access)
+# ============================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: tempo
+  namespace: lgtm
+  labels:
+    app: tempo
+spec:
+  type: ClusterIP
+  selector:
+    app: tempo
+  ports:
+    - port: 3200
+      targetPort: 3200
+      name: http
+    - port: 4317
+      targetPort: 4317
+      name: otlp-grpc
+    - port: 4318
+      targetPort: 4318
+      name: otlp-http

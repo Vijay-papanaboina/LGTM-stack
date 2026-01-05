@@ -36,6 +36,14 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const randomDelay = (min, max) => Math.random() * (max - min) + min;
 
 // ============================================================
+// HEALTH CHECK ENDPOINT (for Kubernetes probes)
+// ============================================================
+
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
+// ============================================================
 // API ENDPOINTS
 // ============================================================
 

@@ -1,0 +1,54 @@
+# ============================================================
+# Payment Service Deployment
+# ============================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-service
+  namespace: lgtm
+  labels:
+    app: payment-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payment-service
+  template:
+    metadata:
+      labels:
+        app: payment-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8002"
+    spec:
+      containers:
+        - name: payment-service
+          image: asia-south1-docker.pkg.dev/learning-gcp-22/lgtm-stack/payment-service:v3
+          ports:
+            - containerPort: 8002
+              name: http
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: OTLP_ENDPOINT
+              value: "http://tempo.lgtm.svc.cluster.local:4318/v1/traces"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 5
+            periodSeconds: 10

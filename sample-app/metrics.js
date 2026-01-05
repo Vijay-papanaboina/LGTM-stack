@@ -87,8 +87,8 @@ appInfo.labels("1.0.0", "development", process.version).set(1);
  */
 function createObservabilityMiddleware(logger) {
   return (req, res, next) => {
-    // Skip /metrics to avoid infinite loop and noise
-    if (req.path === "/metrics") {
+    // Skip internal endpoints to avoid noise in metrics
+    if (req.path === "/metrics" || req.path === "/health") {
       return next();
     }
 

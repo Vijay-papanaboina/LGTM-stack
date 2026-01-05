@@ -36,6 +36,14 @@ app.use(createObservabilityMiddleware(logger));
 const PORT = 8002;
 
 // ============================================================
+// HEALTH CHECK ENDPOINT (for Kubernetes probes)
+// ============================================================
+
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
+// ============================================================
 // HELPER: Simulate processing delay
 // ============================================================
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -44,11 +52,6 @@ const randomDelay = (min, max) => Math.random() * (max - min) + min;
 // ============================================================
 // API ENDPOINTS
 // ============================================================
-
-// Health check
-app.get("/health", (req, res) => {
-  res.json({ status: "ok", service: "payment-service" });
-});
 
 /**
  * POST /payments

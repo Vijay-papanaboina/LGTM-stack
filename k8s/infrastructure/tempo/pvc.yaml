@@ -1,0 +1,18 @@
+# ============================================================
+# Tempo PersistentVolumeClaim
+# ============================================================
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tempo-pvc
+  namespace: lgtm
+  labels:
+    app: tempo
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard-rwo
+  resources:
+    requests:
+      storage: 10Gi

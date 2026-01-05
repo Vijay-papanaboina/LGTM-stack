@@ -1,0 +1,59 @@
+# ============================================================
+# Grafana Datasources ConfigMap
+# ============================================================
+# Pre-configured datasources for Prometheus, Loki, Tempo
+# Uses K8s internal DNS names
+# ============================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: lgtm
+  labels:
+    app: grafana
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        uid: prometheus
+        url: http://prometheus.lgtm.svc.cluster.local:9090
+        access: proxy
+        isDefault: true
+
+      - name: Loki
+        type: loki
+        uid: loki
+        url: http://loki.lgtm.svc.cluster.local:3100
+        access: proxy
+        jsonData:
+          derivedFields:
+            - datasourceUid: tempo
+              matcherRegex: '"trace_id":"([a-f0-9]+)"'
+              name: TraceID
+              url: "$${__value.raw}"
+
+      - name: Tempo
+        type: tempo
+        uid: tempo
+        url: http://tempo.lgtm.svc.cluster.local:3200
+        access: proxy
+        jsonData:
+          httpMethod: GET
+          tracesToLogs:
+            datasourceUid: loki
+            tags: ['app']
+            mappedTags: [{ key: 'service.name', value: 'app' }]
+            mapTagNamesEnabled: true
+            filterByTraceID: true
+          tracesToMetrics:
+            datasourceUid: prometheus
+            tags: [{ key: 'service.name', value: 'service' }]
+          serviceMap:
+            datasourceUid: prometheus
+          nodeGraph:
+            enabled: true
+          lokiSearch:
+            datasourceUid: loki

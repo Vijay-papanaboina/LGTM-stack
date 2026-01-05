@@ -1,0 +1,46 @@
+# ============================================================
+# Prometheus Headless Service (for StatefulSet)
+# ============================================================
+# clusterIP: None makes this headless
+# Required for StatefulSet stable DNS: prometheus-0.prometheus-headless.lgtm.svc
+# ============================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-headless
+  namespace: lgtm
+  labels:
+    app: prometheus
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: prometheus
+  ports:
+    - port: 9090
+      targetPort: 9090
+      name: http
+
+---
+# ============================================================
+# Prometheus Service (for load-balanced access)
+# ============================================================
+# Regular ClusterIP for other services to access
+# ============================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: lgtm
+  labels:
+    app: prometheus
+spec:
+  type: ClusterIP
+  selector:
+    app: prometheus
+  ports:
+    - port: 9090
+      targetPort: 9090
+      name: http
