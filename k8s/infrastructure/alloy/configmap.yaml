@@ -1,0 +1,93 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alloy-config
+  namespace: lgtm
+  labels:
+    app: alloy
+data:
+  config.alloy: |
+    // ============================================================
+    // Grafana Alloy configuration for Kubernetes pod logs -> Loki
+    // Replaces Promtail
+    // ============================================================
+
+    // Write logs to Loki inside the same namespace/cluster
+    loki.write "default" {
+      endpoint {
+        url = "http://loki.lgtm.svc.cluster.local:3100/loki/api/v1/push"
+      }
+    }
+
+    // Discover Kubernetes pods (only in lgtm namespace)
+    discovery.kubernetes "pods" {
+      role = "pod"
+
+      namespaces {
+        names = ["lgtm"]
+      }
+    }
+
+    // Relabel to attach k8s metadata labels
+    discovery.relabel "pod_logs" {
+      targets = discovery.kubernetes.pods.targets
+
+      // Add labels we want
+      rule {
+        action        = "replace"
+        source_labels = ["__meta_kubernetes_namespace"]
+        target_label  = "namespace"
+      }
+
+      rule {
+        action        = "replace"
+        source_labels = ["__meta_kubernetes_pod_name"]
+        target_label  = "pod"
+      }
+
+      rule {
+        action        = "replace"
+        source_labels = ["__meta_kubernetes_pod_container_name"]
+        target_label  = "container"
+      }
+
+      rule {
+        action        = "replace"
+        source_labels = ["__meta_kubernetes_pod_node_name"]
+        target_label  = "node"
+      }
+    }
+
+    loki.source.kubernetes "pods" {
+      targets = discovery.kubernetes.pods.targets
+      forward_to = [loki.process.k8s_pipeline.receiver]
+    }
+
+    // Parse JSON application logs and turn fields into labels
+    loki.process "k8s_pipeline" {
+      // Your app logs are JSON with fields like level, message, status, app
+      stage.json {
+        expressions = {
+          level   = "level",
+          message = "message",
+          status  = "status",
+          app     = "app",
+          method  = "method",
+        }
+        // Don't drop malformed lines; they can still be sent as raw
+        drop_malformed = false
+      }
+
+      // Promote parsed fields to Loki labels
+      stage.labels {
+        values = {
+          level  = "level",
+          status = "status",
+          app    = "app",
+          method = "method",
+        }
+      }
+
+      // Send processed logs to Loki
+      forward_to = [loki.write.default.receiver]
+    }

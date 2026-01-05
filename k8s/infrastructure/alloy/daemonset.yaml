@@ -1,68 +1,58 @@
-# ============================================================
-# Promtail DaemonSet
-# ============================================================
-# Runs on every node to collect logs from all pods
-# Requires access to /var/log/pods on the host
-# ============================================================
-
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: promtail
+  name: alloy
   namespace: lgtm
   labels:
-    app: promtail
+    app: alloy
 spec:
   selector:
     matchLabels:
-      app: promtail
+      app: alloy
   template:
     metadata:
       labels:
-        app: promtail
+        app: alloy
     spec:
-      serviceAccountName: promtail
+      serviceAccountName: alloy
       containers:
-        - name: promtail
-          image: grafana/promtail:2.9.0
+        - name: alloy
+          image: grafana/alloy:latest
           args:
-            - "-config.file=/etc/promtail/promtail.yaml"
+            - "run"
+            - "/etc/alloy/config.alloy"
+            - "--server.http.listen-addr=0.0.0.0:9080"
           ports:
             - containerPort: 9080
               name: http
           volumeMounts:
             - name: config
-              mountPath: /etc/promtail
+              mountPath: /etc/alloy
             - name: pods-logs
               mountPath: /var/log/pods
               readOnly: true
             - name: kubelet-pods
               mountPath: /var/lib/kubelet/pods
               readOnly: true
-            - name: positions
-              mountPath: /tmp
           resources:
             requests:
               cpu: 50m
               memory: 64Mi
             limits:
-              cpu: 100m
-              memory: 128Mi
+              cpu: 200m
+              memory: 256Mi
           securityContext:
             runAsUser: 0
-            readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
       tolerations:
         - operator: Exists
       volumes:
         - name: config
           configMap:
-            name: promtail-config
+            name: alloy-config
         - name: pods-logs
           hostPath:
             path: /var/log/pods
         - name: kubelet-pods
           hostPath:
             path: /var/lib/kubelet/pods
-        - name: positions
-          emptyDir: {}
