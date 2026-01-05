@@ -279,14 +279,14 @@
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "editorMode": "code",
-          "expr": "sum(increase(orders_total{status=\"completed\"}[1h]))",
+          "expr": "sum(increase(orders_total{status=\"completed\"}[15m]))",
           "instant": true,
           "legendFormat": "__auto",
           "range": false,
           "refId": "A"
         }
       ],
-      "title": "✅ Orders (1h)",
+      "title": "✅ Orders (15m)",
       "type": "stat"
     },
     {
@@ -321,14 +321,14 @@
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "editorMode": "code",
-          "expr": "sum(increase(orders_total{status=\"failed\"}[1h]))",
+          "expr": "sum(increase(orders_total{status=\"failed\"}[15m]))",
           "instant": true,
           "legendFormat": "__auto",
           "range": false,
           "refId": "A"
         }
       ],
-      "title": "❌ Failed Orders (1h)",
+      "title": "❌ Failed Orders (15m)",
       "type": "stat"
     },
     {
@@ -363,14 +363,14 @@
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "editorMode": "code",
-          "expr": "sum(increase(payments_total{status=\"approved\"}[1h]))",
+          "expr": "sum(increase(payments_total{status=\"approved\"}[15m]))",
           "instant": true,
           "legendFormat": "__auto",
           "range": false,
           "refId": "A"
         }
       ],
-      "title": "💳 Payments (1h)",
+      "title": "💳 Payments (15m)",
       "type": "stat"
     },
     {
@@ -405,14 +405,14 @@
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "editorMode": "code",
-          "expr": "sum(increase(payments_total{status=\"declined\"}[1h]))",
+          "expr": "sum(increase(payments_total{status=\"declined\"}[15m]))",
           "instant": true,
           "legendFormat": "__auto",
           "range": false,
           "refId": "A"
         }
       ],
-      "title": "🚫 Declined (1h)",
+      "title": "🚫 Declined (15m)",
       "type": "stat"
     },
     {
