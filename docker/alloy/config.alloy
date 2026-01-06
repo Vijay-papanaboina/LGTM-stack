@@ -1,0 +1,141 @@
+// ============================================================
+// GRAFANA ALLOY CONFIGURATION
+// ============================================================
+// Alloy is the unified OpenTelemetry collector that replaces:
+// - Promtail (log collection)
+// - OpenTelemetry Collector (traces/metrics)
+//
+// Data Flow:
+//   Apps --OTLP--> Alloy ---> Tempo (traces)
+//                       ---> Prometheus (metrics via remote write)
+//   Docker Logs ------> Alloy ---> Loki (logs)
+// ============================================================
+
+// Enable Alloy UI on port 12345
+logging {
+  level = "info"
+}
+
+// ============================================================
+// OTLP RECEIVER - Receives traces and metrics from applications
+// ============================================================
+// Apps send telemetry here via OTLP protocol (port 4317 gRPC, 4318 HTTP)
+
+otelcol.receiver.otlp "default" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+
+  output {
+    metrics = [otelcol.processor.batch.default.input]
+    traces  = [otelcol.processor.batch.default.input]
+  }
+}
+
+// ============================================================
+// BATCH PROCESSOR - Batches telemetry for efficient export
+// ============================================================
+
+otelcol.processor.batch "default" {
+  timeout = "5s"
+  
+  output {
+    metrics = [otelcol.exporter.prometheus.default.input]
+    traces  = [otelcol.exporter.otlphttp.tempo.input]
+  }
+}
+
+// ============================================================
+// PROMETHEUS REMOTE WRITE - Push metrics to Prometheus
+// ============================================================
+
+otelcol.exporter.prometheus "default" {
+  forward_to = [prometheus.remote_write.default.receiver]
+}
+
+prometheus.remote_write "default" {
+  endpoint {
+    url = "http://prometheus:9090/api/v1/write"
+  }
+}
+
+// ============================================================
+// TEMPO EXPORTER - Sends traces to Tempo
+// ============================================================
+
+otelcol.exporter.otlphttp "tempo" {
+  client {
+    endpoint = "http://tempo:4318"
+    tls {
+      insecure = true
+    }
+  }
+}
+
+// ============================================================
+// DOCKER LOG COLLECTION - Replaces Promtail
+// ============================================================
+// Scrapes logs from Docker container log files
+
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "docker_logs" {
+  targets = discovery.docker.containers.targets
+
+  // Keep only containers with logging label or all containers
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_id"]
+    target_label  = "container_id"
+  }
+}
+
+loki.source.docker "default" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.docker_logs.output
+  forward_to = [loki.process.docker_logs.receiver]
+}
+
+// ============================================================
+// LOG PROCESSING PIPELINE - Parse JSON logs from Winston
+// ============================================================
+
+loki.process "docker_logs" {
+  forward_to = [loki.write.default.receiver]
+
+  // Parse Winston JSON logs
+  stage.json {
+    expressions = {
+      level   = "level",
+      message = "message",
+      app     = "app",
+    }
+  }
+
+  // Add extracted fields as labels
+  stage.labels {
+    values = {
+      level = "",
+      app   = "",
+    }
+  }
+}
+
+// ============================================================
+// LOKI WRITER - Sends logs to Loki
+// ============================================================
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

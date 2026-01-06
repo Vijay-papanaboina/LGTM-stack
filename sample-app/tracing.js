@@ -1,57 +1,57 @@
 /**
  * ============================================================
- * OPENTELEMETRY TRACING SETUP - Gateway Service
+ * OPENTELEMETRY INSTRUMENTATION - Gateway Service
  * ============================================================
  *
- * WHY THIS FILE EXISTS:
- * This file initializes distributed tracing for the entire application.
- * It MUST be loaded before ANY other imports because OpenTelemetry works
- * by "monkey-patching" Node.js modules (http, express, fetch, etc.).
- * If you import express before this file runs, tracing won't work!
+ * IMPORTANT: This file MUST be loaded BEFORE any other imports!
+ * OpenTelemetry works by "monkey-patching" Node.js modules.
  *
- * HOW AUTO-INSTRUMENTATION WORKS:
- * 1. This file loads first (require("./tracing") at top of app.js)
- * 2. OpenTelemetry patches Node's require() function
- * 3. When you later import express/fetch/etc., they get wrapped
- * 4. Every HTTP request automatically creates spans with timing
- * 5. Outgoing HTTP calls automatically propagate trace context
- *
- * WHAT GETS TRACED AUTOMATICALLY:
- * - Incoming HTTP requests (express routes)
- * - Outgoing HTTP requests (fetch, http.request)
- * - Database queries (if using pg, mysql, redis, etc.)
- * - Many other libraries (see: @opentelemetry/auto-instrumentations-node)
+ * This unified setup handles:
+ * - TRACES: Auto-instrumented HTTP requests sent to Alloy → Tempo
+ * - METRICS: Auto-instrumented + default metrics sent to Alloy → Prometheus
  *
  * DATA FLOW:
- * Your App → OpenTelemetry SDK → OTLP Exporter → Tempo → Grafana
+ * Your App → OpenTelemetry SDK → OTLP Exporter → Alloy → Tempo/Prometheus
  * ============================================================
  */
 
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { getNodeAutoInstrumentations } from "@opentelemetry/auto-instrumentations-node";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
+import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-http";
+import { PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
 import { Resource } from "@opentelemetry/resources";
-import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
+
+// Semantic convention constants (using strings directly for ESM/CJS compatibility)
+const SERVICE_NAME = "service.name";
+const SERVICE_VERSION = "service.version";
 
 // ============================================================
 // CONFIGURATION
 // ============================================================
 
-// Tempo's OTLP HTTP endpoint (set via docker-compose environment)
-// Using HTTP instead of gRPC because it's easier to debug and works through proxies
-const OTLP_ENDPOINT =
-  process.env.OTLP_ENDPOINT || "http://tempo:4318/v1/traces";
+// Alloy's OTLP HTTP endpoint (set via docker-compose environment)
+const OTLP_ENDPOINT = process.env.OTLP_ENDPOINT || "http://alloy:4318";
 
 // ============================================================
 // TRACE EXPORTER
 // ============================================================
-// Exports traces to Tempo using OTLP (OpenTelemetry Protocol)
-// OTLP is the standard wire format - works with Tempo, Jaeger, Datadog, etc.
 
 const traceExporter = new OTLPTraceExporter({
-  url: OTLP_ENDPOINT,
-  // Optional: Add custom headers for auth (not needed for local Tempo)
-  // headers: { "Authorization": "Bearer xxx" },
+  url: `${OTLP_ENDPOINT}/v1/traces`,
+});
+
+// ============================================================
+// METRIC EXPORTER
+// ============================================================
+
+const metricExporter = new OTLPMetricExporter({
+  url: `${OTLP_ENDPOINT}/v1/metrics`,
+});
+
+const metricReader = new PeriodicExportingMetricReader({
+  exporter: metricExporter,
+  exportIntervalMillis: 5000, // Export every 5 seconds
 });
 
 // ============================================================
@@ -59,50 +59,53 @@ const traceExporter = new OTLPTraceExporter({
 // ============================================================
 
 const sdk = new NodeSDK({
-  // Resource: Identifies this service in traces
-  // Every span from this app will have these attributes
   resource: new Resource({
-    [SemanticResourceAttributes.SERVICE_NAME]: "gateway", // Shows as "gateway" in Tempo
-    [SemanticResourceAttributes.SERVICE_VERSION]: "1.0.0",
-    // You can add more: environment, team, region, etc.
+    [SERVICE_NAME]: "gateway",
+    [SERVICE_VERSION]: "1.0.0",
   }),
 
-  // Where to send traces
   traceExporter: traceExporter,
+  metricReader: metricReader,
 
-  // Auto-instrumentation: Automatically trace common libraries
-  // This is the magic - no manual span creation needed for HTTP, DB, etc.
+  // Auto-instrumentation: Automatically creates spans AND metrics for HTTP
+  // This provides default metrics like http.server.duration, http.server.request.size
   instrumentations: [
     getNodeAutoInstrumentations({
-      // Disable file system instrumentation - too noisy, not useful
       "@opentelemetry/instrumentation-fs": { enabled: false },
-      // You can configure specific instrumentations here
-      // "@opentelemetry/instrumentation-http": { ... }
     }),
   ],
 });
 
 // ============================================================
-// START TRACING
+// START TRACING & METRICS
 // ============================================================
 
 sdk.start();
 
+// ============================================================
+// CUSTOM METRICS - Active Requests Gauge
+// ============================================================
+import { metrics } from "@opentelemetry/api";
+
+const meter = metrics.getMeter("gateway");
+const activeRequestsGauge = meter.createUpDownCounter("http_active_requests", {
+  description: "Number of active HTTP requests being processed",
+});
+
 console.log("📊 OpenTelemetry initialized for gateway (sample-app)");
-console.log(`   Sending traces to: ${OTLP_ENDPOINT}`);
+console.log(`   Sending telemetry to: ${OTLP_ENDPOINT}`);
 
 // ============================================================
 // GRACEFUL SHUTDOWN
 // ============================================================
-// Ensures all pending traces are flushed before the process exits
-// Without this, you might lose traces when the container stops
 
 process.on("SIGTERM", () => {
   sdk
     .shutdown()
-    .then(() => console.log("Tracing terminated"))
-    .catch((error) => console.log("Error terminating tracing", error))
+    .then(() => console.log("OpenTelemetry terminated"))
+    .catch((error) => console.log("Error terminating OpenTelemetry", error))
     .finally(() => process.exit(0));
 });
 
 export default sdk;
+export { activeRequestsGauge };

@@ -53,32 +53,7 @@ scrape_configs:
   # ============================================================
   # 3. Our Sample Application - Custom app metrics
   # ============================================================
-  - job_name: "sample-app"
-    static_configs:
-      - targets: ["sample-app:8000"]
-    relabel_configs:
-      - source_labels: []
-        target_label: "service"
-        replacement: "sample-app"
-
+  # NOTE: App metrics (sample-app, order-service, payment-service)
+  # now come via OTel push to Alloy, not Prometheus scrape.
+  # We receive them via prometheus.remote_write in Alloy.
   # ============================================================
-  # 4. Order Service (New)
-  # ============================================================
-  - job_name: "order-service"
-    static_configs:
-      - targets: ["order-service:8001"]
-    relabel_configs:
-      - source_labels: []
-        target_label: "service"
-        replacement: "order-service"
-
-  # ============================================================
-  # 5. Payment Service (New)
-  # ============================================================
-  - job_name: "payment-service"
-    static_configs:
-      - targets: ["payment-service:8002"]
-    relabel_configs:
-      - source_labels: []
-        target_label: "service"
-        replacement: "payment-service"

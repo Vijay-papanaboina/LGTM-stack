@@ -7,31 +7,35 @@
  * Request Flow:
  * Gateway → Order Service → Payment Service (this)
  *
- * This service:
- * - Receives payment requests from order-service
- * - Simulates payment processing
- * - Returns success or failure
- * - The trace shows this as the innermost span
+ * Observability:
+ * - TRACES: OpenTelemetry auto-instrumentation -> Alloy -> Tempo
+ * - METRICS: OpenTelemetry auto-instrumentation -> Alloy -> Prometheus
+ * - LOGS: Winston -> Alloy -> Loki
  */
 
 // Load tracing FIRST!
-import "./tracing.js";
+import { activeRequestsGauge } from "./tracing.js";
 
 import express from "express";
 import logger from "./logger.js";
-import {
-  register,
-  createObservabilityMiddleware,
-  paymentsTotal,
-  paymentDuration,
-  activePayments,
-} from "./metrics.js";
 
 const app = express();
 app.use(express.json());
 
-// Use standardized observability middleware (logs + platform metrics)
-app.use(createObservabilityMiddleware(logger));
+// Active requests tracking middleware
+app.use((req, res, next) => {
+  activeRequestsGauge.add(1, { service: "payment-service" });
+  let decremented = false;
+  const decrement = () => {
+    if (!decremented) {
+      decremented = true;
+      activeRequestsGauge.add(-1, { service: "payment-service" });
+    }
+  };
+  res.on("finish", decrement);
+  res.on("close", decrement); // Handles client disconnect
+  next();
+});
 
 const PORT = 8002;
 
@@ -61,9 +65,6 @@ const randomDelay = (min, max) => Math.random() * (max - min) + min;
  * gateway → order-service → payment-service (this span)
  */
 app.post("/payments", async (req, res) => {
-  const startTime = Date.now();
-  activePayments.inc();
-
   const { orderId, amount } = req.body;
   const paymentId = `PAY-${Date.now()}`;
 
@@ -82,9 +83,6 @@ app.post("/payments", async (req, res) => {
       payment_id: paymentId,
       order_id: orderId,
     });
-    paymentsTotal.labels("declined").inc();
-    activePayments.dec();
-    paymentDuration.observe((Date.now() - startTime) / 1000);
 
     return res.status(400).json({
       status: "declined",
@@ -95,9 +93,6 @@ app.post("/payments", async (req, res) => {
   }
 
   logger.info("Payment approved", { payment_id: paymentId, order_id: orderId });
-  paymentsTotal.labels("approved").inc();
-  activePayments.dec();
-  paymentDuration.observe((Date.now() - startTime) / 1000);
 
   res.json({
     status: "approved",
@@ -106,12 +101,6 @@ app.post("/payments", async (req, res) => {
     amount: amount,
     processedAt: new Date().toISOString(),
   });
-});
-
-// Metrics endpoint for Prometheus
-app.get("/metrics", async (req, res) => {
-  res.set("Content-Type", register.contentType);
-  res.end(await register.metrics());
 });
 
 // ============================================================

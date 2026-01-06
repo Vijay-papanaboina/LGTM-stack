@@ -3,30 +3,41 @@
  * ==============================================
  *
  * Instrumented with:
- * - METRICS (Prometheus) - see metrics.js
- * - LOGS (Winston -> Promtail -> Loki)
- * - TRACES (OpenTelemetry -> Tempo)
+ * - METRICS (OpenTelemetry auto-instrumentation -> Alloy -> Prometheus)
+ * - LOGS (Winston -> Alloy -> Loki)
+ * - TRACES (OpenTelemetry -> Alloy -> Tempo)
  */
 
 // ============================================================
 // IMPORTANT: Load tracing FIRST before any other imports!
 // ============================================================
-import "./tracing.js";
+import { activeRequestsGauge } from "./tracing.js";
 
 import express from "express";
 import axios from "axios";
 import logger from "./logger.js";
-import { register, createObservabilityMiddleware } from "./metrics.js";
 
 const app = express();
 app.use(express.json());
 
+// Active requests tracking middleware
+app.use((req, res, next) => {
+  activeRequestsGauge.add(1, { service: "gateway" });
+  let decremented = false;
+  const decrement = () => {
+    if (!decremented) {
+      decremented = true;
+      activeRequestsGauge.add(-1, { service: "gateway" });
+    }
+  };
+  res.on("finish", decrement);
+  res.on("close", decrement); // Handles client disconnect
+  next();
+});
+
 const PORT = 8000;
 const ORDER_SERVICE_URL =
   process.env.ORDER_SERVICE_URL || "http://order-service:8001";
-
-// Use observability middleware
-app.use(createObservabilityMiddleware(logger));
 
 // ============================================================
 // HELPER: Simulate random delay
@@ -111,7 +122,7 @@ app.get("/api/error", async (req, res) => {
  */
 app.post("/api/order", async (req, res) => {
   try {
-    console.log("📦 Received order request, forwarding to order-service...");
+    logger.info("Received order request, forwarding to order-service");
 
     // Call order service
     // OpenTelemetry automatically propagates trace context via headers
@@ -123,21 +134,16 @@ app.post("/api/order", async (req, res) => {
     const result = response.data;
 
     // Axios throws on non-2xx status, so we don't need manual check here
-    console.log("✅ Order completed:", result.orderId);
+    logger.info("Order completed", { order_id: result.orderId });
     res.json(result);
   } catch (error) {
     if (error.response) {
       // Axios error with response from server
       return res.status(error.response.status).json(error.response.data);
     }
-    console.error("Order error:", error);
+    logger.error("Order error", { error: error.message });
     res.status(500).json({ error: error.message });
   }
-});
-
-app.get("/metrics", async (req, res) => {
-  res.set("Content-Type", register.contentType);
-  res.end(await register.metrics());
 });
 
 // ============================================================
@@ -146,11 +152,6 @@ app.get("/metrics", async (req, res) => {
 
 app.listen(PORT, () => {
   logger.info("Application started", { port: PORT });
-  console.log("");
-  console.log("🚀 Sample App started!");
-  console.log(`📊 App:     http://localhost:${PORT}`);
-  console.log(`📈 Metrics: http://localhost:${PORT}/metrics`);
-  console.log("📝 Logs:    Console -> Promtail -> Loki");
 });
 
 // Graceful shutdown

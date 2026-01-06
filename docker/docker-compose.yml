@@ -108,8 +108,7 @@ services:
     container_name: tempo
     ports:
       - "3200:3200" # Tempo HTTP API (for Grafana queries)
-      - "4317:4317" # OTLP gRPC receiver (apps send traces here)
-      - "4318:4318" # OTLP HTTP receiver (alternative)
+      # OTLP ports removed - Alloy receives OTLP and forwards to Tempo internally
     volumes:
       - ./tempo/tempo-config.yaml:/etc/tempo/config.yaml:ro
       - tempo_data:/var/tempo
@@ -119,32 +118,54 @@ services:
       - lgtm-network
 
   # ============================================================
-  # PROMTAIL - Log collector (collects Docker container logs)
+  # ALLOY - Unified OpenTelemetry Collector
   # ============================================================
-  promtail:
-    image: grafana/promtail:2.9.3
-    container_name: promtail
+  # Replaces Promtail. Receives OTLP traces/metrics from apps,
+  # collects Docker logs, and exports to Tempo/Prometheus/Loki.
+  # ============================================================
+  alloy:
+    image: grafana/alloy:v1.4.2
+    container_name: alloy
+    ports:
+      - "4317:4317" # OTLP gRPC receiver
+      - "4318:4318" # OTLP HTTP receiver
+      - "12345:12345" # Alloy UI
     volumes:
-      - ./promtail/promtail-config.yaml:/etc/promtail/config.yaml:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock
-    command: -config.file=/etc/promtail/config.yaml
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --storage.path=/var/lib/alloy/data
+      - --server.http.listen-addr=0.0.0.0:12345
     restart: unless-stopped
     networks:
       - lgtm-network
     depends_on:
       - loki
+      - tempo
+      - prometheus
 
   # ============================================================
-  # NODE EXPORTER - Host/container metrics (CPU, RAM, disk)
+  # NODE EXPORTER - VM/Host metrics (CPU, RAM, disk)
+  # ============================================================
+  # On Docker Desktop (Windows/Mac), this gives WSL2/VM metrics
+  # rather than Windows host metrics, but still useful!
   # ============================================================
   node-exporter:
     image: prom/node-exporter:v1.7.0
     container_name: node-exporter
     ports:
       - "9100:9100"
-    # On Windows/Mac with Docker Desktop, we can't mount /proc
-    # So we'll get container-level metrics instead (still useful for learning!)
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--path.rootfs=/rootfs"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
     restart: unless-stopped
     networks:
       - lgtm-network
@@ -165,13 +186,13 @@ services:
     environment:
       # URL of the order service (for inter-service calls)
       - ORDER_SERVICE_URL=http://order-service:8001
-      # Where to send traces (Tempo's OTLP HTTP endpoint)
-      - OTLP_ENDPOINT=http://tempo:4318/v1/traces
+      # Where to send traces/metrics (Alloy's OTLP endpoint)
+      - OTLP_ENDPOINT=http://alloy:4318
     restart: unless-stopped
     networks:
       - lgtm-network
     depends_on:
-      - tempo
+      - alloy
       - order-service
     labels:
       - "logging=promtail"
@@ -196,12 +217,12 @@ services:
       - "8001:8001"
     environment:
       - PAYMENT_SERVICE_URL=http://payment-service:8002
-      - OTLP_ENDPOINT=http://tempo:4318/v1/traces
+      - OTLP_ENDPOINT=http://alloy:4318
     restart: unless-stopped
     networks:
       - lgtm-network
     depends_on:
-      - tempo
+      - alloy
       - payment-service
     labels:
       - "logging=promtail"
@@ -220,12 +241,12 @@ services:
     ports:
       - "8002:8002"
     environment:
-      - OTLP_ENDPOINT=http://tempo:4318/v1/traces
+      - OTLP_ENDPOINT=http://alloy:4318
     restart: unless-stopped
     networks:
       - lgtm-network
     depends_on:
-      - tempo
+      - alloy
     labels:
       - "logging=promtail"
 
@@ -250,6 +271,35 @@ services:
     depends_on:
       - prometheus
       - loki
+
+  # ============================================================
+  # TRAFFIC GENERATOR - Makes some orders and exits
+  # ============================================================
+  traffic-generator:
+    image: curlimages/curl:latest
+    container_name: traffic-generator
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "⏳ Waiting for sample-app to be ready..."
+        sleep 10
+        echo "🚀 Generating traffic..."
+        for i in 1 2 3 4 5 6 7 8 9 10; do
+          echo "📦 Order $$i"
+          curl -s -X POST http://sample-app:8000/api/order \
+            -H "Content-Type: application/json" \
+            -d '{"total": 99.99}'
+          sleep 1
+        done
+        echo "✅ Done! Generated 10 orders."
+    networks:
+      - lgtm-network
+    depends_on:
+      - alloy
+      - grafana
+      - sample-app
+      - order-service
+      - payment-service
 
 # ============================================================
 # VOLUMES - Persistent storage

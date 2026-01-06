@@ -24,6 +24,7 @@ datasources:
   # ============================================================
   - name: Loki
     type: loki
+    uid: loki
     access: proxy
     url: http://loki:3100
     orgId: 1
@@ -38,6 +39,7 @@ datasources:
   # We can search by trace ID or find traces from logs/metrics.
   - name: Tempo
     type: tempo
+    uid: tempo
     access: proxy
     url: http://tempo:3200
     orgId: 1
