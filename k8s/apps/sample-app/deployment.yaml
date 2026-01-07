@@ -24,7 +24,7 @@ spec:
     spec:
       containers:
         - name: sample-app
-          image: asia-south1-docker.pkg.dev/learning-gcp-22/lgtm-stack/sample-app:v3
+          image: dockerhubtesting098/sample-app:latest
           ports:
             - containerPort: 8000
               name: http
@@ -34,7 +34,7 @@ spec:
             - name: ORDER_SERVICE_URL
               value: "http://order-service.lgtm.svc.cluster.local:8001"
             - name: OTLP_ENDPOINT
-              value: "http://tempo.lgtm.svc.cluster.local:4318/v1/traces"
+              value: "http://alloy.lgtm.svc.cluster.local:4318"
           resources:
             requests:
               cpu: 50m

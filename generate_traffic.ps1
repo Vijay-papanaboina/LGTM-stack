@@ -15,7 +15,7 @@ param(
     [switch]$Burst
 )
 
-$BaseUrl = "http://localhost:8000"
+$BaseUrl = "http://167.71.227.147:30800"
 $Interval = if ($Fast) { 0.1 } elseif ($Burst) { 0.5 } else { 0.5 }
 
 Write-Host "🚀 Starting Traffic Generator (High Volume)..." -ForegroundColor Cyan

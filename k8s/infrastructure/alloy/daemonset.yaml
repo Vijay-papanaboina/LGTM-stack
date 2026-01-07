@@ -23,6 +23,10 @@ spec:
             - "/etc/alloy/config.alloy"
             - "--server.http.listen-addr=0.0.0.0:9080"
           ports:
+            - containerPort: 4317
+              name: otlp-grpc
+            - containerPort: 4318
+              name: otlp-http
             - containerPort: 9080
               name: http
           volumeMounts:

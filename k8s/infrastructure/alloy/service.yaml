@@ -1,0 +1,27 @@
+# ============================================================
+# Alloy Service - Exposes OTLP ports for telemetry ingestion
+# ============================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: alloy
+  namespace: lgtm
+  labels:
+    app: alloy
+spec:
+  selector:
+    app: alloy
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318 
+      protocol: TCP
+    - name: ui
+      port: 12345
+      targetPort: 12345
+      protocol: TCP

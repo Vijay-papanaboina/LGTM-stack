@@ -24,7 +24,7 @@ spec:
     spec:
       containers:
         - name: payment-service
-          image: asia-south1-docker.pkg.dev/learning-gcp-22/lgtm-stack/payment-service:v3
+          image: dockerhubtesting098/payment-service:latest
           ports:
             - containerPort: 8002
               name: http
@@ -32,7 +32,7 @@ spec:
             - name: NODE_ENV
               value: "production"
             - name: OTLP_ENDPOINT
-              value: "http://tempo.lgtm.svc.cluster.local:4318/v1/traces"
+              value: "http://alloy.lgtm.svc.cluster.local:4318"
           resources:
             requests:
               cpu: 50m
