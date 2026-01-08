@@ -1,0 +1,28 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: lgtm-app-rules
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack # Required for Operator to pick it up
+spec:
+  groups:
+    - name: lgtm-apps.rules
+      rules:
+        - alert: HighErrorRate
+          expr: sum(rate(http_server_duration_milliseconds_count{http_status_code=~"5.."}[1m])) by (service_name) / sum(rate(http_server_duration_milliseconds_count[1m])) by (service_name) > 0.05
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "High error rate in {{ $labels.service_name }}"
+            description: "{{ $labels.service_name }} has error rate > 5% for 1 minute"
+
+        - alert: GlobalHighLatency
+          expr: histogram_quantile(0.95, sum(rate(http_server_duration_milliseconds_bucket[5m])) by (le, service_name)) > 2000
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High latency in {{ $labels.service_name }}"
+            description: "95th percentile latency is > 2s"

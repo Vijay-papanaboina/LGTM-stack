@@ -34,7 +34,7 @@ spec:
             - name: PAYMENT_SERVICE_URL
               value: "http://payment-service.lgtm.svc.cluster.local:8002"
             - name: OTLP_ENDPOINT
-              value: "http://alloy.lgtm.svc.cluster.local:4318"
+              value: "http://alloy.monitoring.svc.cluster.local:4318"
           resources:
             requests:
               cpu: 50m

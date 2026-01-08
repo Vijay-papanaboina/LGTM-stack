@@ -1,0 +1,75 @@
+# Loki Helm Values
+# Single binary mode for simplicity
+
+# Deploy mode
+deploymentMode: SingleBinary
+
+loki:
+  # Disable multi-tenancy for simplicity
+  auth_enabled: false
+
+  # Common config
+  commonConfig:
+    replication_factor: 1
+
+  # Storage config
+  storage:
+    type: filesystem
+
+  # Schema config
+  schemaConfig:
+    configs:
+      - from: "2024-01-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+
+# Single binary deployment
+singleBinary:
+  replicas: 1
+
+  persistence:
+    enabled: true
+    size: 1Gi
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# Disable components not needed in single binary mode
+backend:
+  replicas: 0
+read:
+  replicas: 0
+write:
+  replicas: 0
+
+# Gateway
+gateway:
+  enabled: false
+
+# Disable caching (causes timeout issues)
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
+
+# Disable test
+test:
+  enabled: false
+
+# Disable monitoring (we have our own)
+monitoring:
+  selfMonitoring:
+    enabled: false
+    grafanaAgent:
+      installOperator: false
+  lokiCanary:
+    enabled: false

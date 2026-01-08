@@ -1,0 +1,159 @@
+# kube-prometheus-stack Helm Values
+# Includes: Prometheus, Grafana, Node Exporter, AlertManager
+
+# Global settings
+fullnameOverride: ""
+namespaceOverride: "monitoring"
+
+# =============================================================================
+# Prometheus Configuration
+# =============================================================================
+prometheus:
+  prometheusSpec:
+    # Enable remote write receiver (for Alloy to push metrics)
+    enableRemoteWriteReceiver: true
+
+    # Retention
+    retention: 7d
+    retentionSize: "5GB"
+
+    # Storage
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 1Gi
+
+    # Resource limits
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+# =============================================================================
+# Grafana Configuration
+# =============================================================================
+grafana:
+  enabled: true
+
+  # Admin credentials
+  adminUser: admin
+  adminPassword: admin
+
+  # Service type
+  service:
+    type: NodePort
+    nodePort: 30300
+
+  # Persistence
+  persistence:
+    enabled: true
+    size: 1Gi
+
+  # Additional datasources (Loki, Tempo)
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      uid: loki
+      url: http://loki.monitoring.svc:3100
+      access: proxy
+      isDefault: false
+      jsonData:
+        derivedFields:
+          - datasourceUid: tempo
+            matcherRegex: '"traceId":"([a-fA-F0-9]+)"'
+            name: TraceID
+            url: "$${__value.raw}"
+
+    - name: Tempo
+      type: tempo
+      uid: tempo
+      url: http://tempo.monitoring.svc:3200
+      access: proxy
+      isDefault: false
+      jsonData:
+        tracesToLogs:
+          datasourceUid: loki
+          tags: ["service.name"]
+        serviceMap:
+          datasourceUid: prometheus
+        nodeGraph:
+          enabled: true
+
+  # Sidecar for dashboard provisioning
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      searchNamespace: monitoring
+
+# =============================================================================
+# AlertManager Configuration
+# =============================================================================
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 1Gi
+
+# =============================================================================
+# Node Exporter Configuration
+# =============================================================================
+nodeExporter:
+  enabled: true
+
+prometheus-node-exporter:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
+
+# =============================================================================
+# Kube State Metrics
+# =============================================================================
+kubeStateMetrics:
+  enabled: true
+
+# =============================================================================
+# Default Rules (disable some noisy ones for demo)
+# =============================================================================
+defaultRules:
+  create: true
+  rules:
+    alertmanager: true
+    etcd: false
+    configReloaders: true
+    general: true
+    k8s: true
+    kubeApiserver: false
+    kubeApiserverAvailability: false
+    kubeApiserverSlos: false
+    kubelet: true
+    kubeProxy: false
+    kubePrometheusGeneral: true
+    kubePrometheusNodeRecording: true
+    kubernetesApps: true
+    kubernetesResources: true
+    kubernetesStorage: true
+    kubernetesSystem: true
+    kubeScheduler: false
+    kubeStateMetrics: true
+    network: true
+    node: true
+    nodeExporterAlerting: true
+    nodeExporterRecording: true
+    prometheus: true
+    prometheusOperator: true

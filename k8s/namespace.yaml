@@ -1,14 +1,23 @@
 # ============================================================
-# LGTM Namespace
+# Kubernetes Namespaces
 # ============================================================
-# All observability components will be deployed in this namespace
-# This keeps them isolated from other workloads
+# monitoring - Prometheus, Grafana, Loki, Tempo, Alloy
+# lgtm       - Application workloads
 # ============================================================
 
 apiVersion: v1
 kind: Namespace
 metadata:
+  name: monitoring
+  labels:
+    app.kubernetes.io/name: monitoring
+    app.kubernetes.io/part-of: observability
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
   name: lgtm
   labels:
-    app.kubernetes.io/name: lgtm-stack
+    app.kubernetes.io/name: lgtm-apps
     app.kubernetes.io/part-of: observability

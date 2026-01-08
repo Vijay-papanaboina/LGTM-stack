@@ -15,7 +15,7 @@ param(
     [switch]$Burst
 )
 
-$BaseUrl = "http://167.71.227.147:30800"
+$BaseUrl = "http://142.93.222.124:30800"
 $Interval = if ($Fast) { 0.1 } elseif ($Burst) { 0.5 } else { 0.5 }
 
 Write-Host "🚀 Starting Traffic Generator (High Volume)..." -ForegroundColor Cyan
@@ -57,7 +57,7 @@ while ($true) {
         1..10 | ForEach-Object -Parallel {
             $BaseUrl = $using:BaseUrl
             try {
-                Invoke-WebRequest -Uri "$BaseUrl/api/order" -Method POST -Body '{"total": 99.99}' -ContentType "application/json" -ErrorAction SilentlyContinue -TimeoutSec 10 | Out-Null
+                Invoke-WebRequest -Uri "$BaseUrl/api/slow" -Method GET -ErrorAction SilentlyContinue -TimeoutSec 10 | Out-Null
             } catch {}
         } -ThrottleLimit 10
         Write-Host "   ✅ Burst complete" -ForegroundColor Green

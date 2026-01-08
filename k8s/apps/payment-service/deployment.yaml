@@ -32,7 +32,7 @@ spec:
             - name: NODE_ENV
               value: "production"
             - name: OTLP_ENDPOINT
-              value: "http://alloy.lgtm.svc.cluster.local:4318"
+              value: "http://alloy.monitoring.svc.cluster.local:4318"
           resources:
             requests:
               cpu: 50m

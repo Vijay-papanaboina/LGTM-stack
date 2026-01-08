@@ -1,0 +1,160 @@
+# Alloy Helm Values
+# Unified telemetry collector
+
+alloy:
+  # Extra ports to expose on the Alloy container and service
+  extraPorts:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP
+
+  # Configuration
+  configMap:
+    create: true
+    content: |
+      // =============================================================================
+      // OTLP Receiver - Receive traces and metrics from applications
+      // =============================================================================
+      otelcol.receiver.otlp "default" {
+        grpc {
+          endpoint = "0.0.0.0:4317"
+        }
+        http {
+          endpoint = "0.0.0.0:4318"
+        }
+        output {
+          traces  = [otelcol.processor.batch.default.input]
+          metrics = [otelcol.processor.batch.default.input]
+        }
+      }
+
+      // =============================================================================
+      // Batch Processor
+      // =============================================================================
+      otelcol.processor.batch "default" {
+        output {
+          traces  = [otelcol.exporter.otlphttp.tempo.input]
+          metrics = [otelcol.exporter.prometheus.default.input]
+        }
+      }
+
+      // =============================================================================
+      // Export Traces to Tempo
+      // =============================================================================
+      otelcol.exporter.otlphttp "tempo" {
+        client {
+          endpoint = "http://tempo.monitoring.svc:4318"
+          tls {
+            insecure = true
+          }
+        }
+      }
+
+      // =============================================================================
+      // Export Metrics to Prometheus
+      // =============================================================================
+      otelcol.exporter.prometheus "default" {
+        forward_to = [prometheus.remote_write.default.receiver]
+      }
+
+      prometheus.remote_write "default" {
+        endpoint {
+          url = "http://kube-prometheus-stack-prometheus.monitoring.svc:9090/api/v1/write"
+        }
+      }
+
+      // =============================================================================
+      // Kubernetes Log Discovery
+      // =============================================================================
+      discovery.kubernetes "pods" {
+        role = "pod"
+        namespaces {
+          names = ["lgtm"]
+        }
+      }
+
+      discovery.relabel "pods" {
+        targets = discovery.kubernetes.pods.targets
+        
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app"]
+          regex         = "sample-app|order-service|payment-service"
+          action        = "keep"
+        }
+        
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+      }
+
+      // =============================================================================
+      // Collect Logs from Pods
+      // =============================================================================
+      loki.source.kubernetes "pods" {
+        targets    = discovery.relabel.pods.output
+        forward_to = [loki.process.k8s_pipeline.receiver]
+      }
+
+      // =============================================================================
+      // Process Logs - Extract labels from JSON
+      // =============================================================================
+      loki.process "k8s_pipeline" {
+        stage.json {
+          expressions = {
+            level   = "level",
+            message = "message",
+            app     = "app",
+          }
+          drop_malformed = false
+        }
+
+        stage.labels {
+          values = {
+            level = "",
+            app   = "",
+          }
+        }
+
+        forward_to = [loki.write.default.receiver]
+      }
+
+      // =============================================================================
+      // Write Logs to Loki
+      // =============================================================================
+      loki.write "default" {
+        endpoint {
+          url = "http://loki.monitoring.svc:3100/loki/api/v1/push"
+        }
+      }
+
+# Controller type
+controller:
+  type: daemonset
+
+# Service for OTLP endpoints
+service:
+  enabled: true
+  type: ClusterIP
+
+# RBAC for log collection
+rbac:
+  create: true
+
+serviceAccount:
+  create: true

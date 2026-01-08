@@ -9,7 +9,7 @@
 #   -f          Fast mode (no delay)
 # ============================================================
 
-BASE_URL="${BASE_URL:-http://34.93.182.86}"
+BASE_URL="${BASE_URL:-http://142.93.222.124}"
 COUNT=10
 BURST=false
 FAST=false

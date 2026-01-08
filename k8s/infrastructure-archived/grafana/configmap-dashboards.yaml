@@ -2,15 +2,17 @@
 # Grafana Dashboard ConfigMap
 # ============================================================
 # Contains the LGTM Stack Overview dashboard
+# Apply after Helm install - Grafana sidecar will pick this up
 # ============================================================
 
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: grafana-dashboards
+  name: lgtm-dashboard
   namespace: lgtm
   labels:
     app: grafana
+    grafana_dashboard: "1" # Required for Grafana sidecar to discover
 data:
   lgtm-dashboard.json: |
     {
